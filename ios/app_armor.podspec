@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'app_armor'
-  s.version          = '0.1.0'
+  s.version          = '0.1.1'
   s.summary          = 'All-in-one mobile security for Flutter apps.'
   s.description      = <<-DESC
 Runtime protection, screen privacy and secure storage for Flutter apps.

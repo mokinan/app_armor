@@ -19,12 +19,20 @@ public class AppArmorPlugin: NSObject, FlutterPlugin {
     self.channel = channel
     super.init()
     let center = NotificationCenter.default
+    // Apps with and without UIScene: both sets of notifications, the cover
+    // is only added once.
     center.addObserver(
       self, selector: #selector(willResignActive),
       name: UIApplication.willResignActiveNotification, object: nil)
     center.addObserver(
       self, selector: #selector(didBecomeActive),
       name: UIApplication.didBecomeActiveNotification, object: nil)
+    center.addObserver(
+      self, selector: #selector(willResignActive),
+      name: UIScene.willDeactivateNotification, object: nil)
+    center.addObserver(
+      self, selector: #selector(didBecomeActive),
+      name: UIScene.didActivateNotification, object: nil)
     center.addObserver(
       self, selector: #selector(didTakeScreenshot),
       name: UIApplication.userDidTakeScreenshotNotification, object: nil)

@@ -117,7 +117,9 @@ class PrivacyConfig {
   final bool coverWhileRecording;
 
   /// Android: ignores touches while another app draws over this one, so
-  /// an overlay can't trick the user into tapping something.
+  /// an overlay can't trick the user into tapping something. Screen filter
+  /// apps (blue-light, dimmer) also draw over apps, so their users can't
+  /// tap while one is on. Turn off if your users rely on them.
   final bool preventTapjacking;
 
   /// Reports [ArmorThreat.screenshot] (iOS, Android 14+) and

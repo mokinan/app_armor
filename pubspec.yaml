@@ -2,7 +2,7 @@ name: app_armor
 description: >-
   All-in-one mobile security for Flutter: root/jailbreak, hooking and tamper
   detection, screen privacy, secure storage, SSL pinning. One call in main().
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/mokinan/app_armor
 repository: https://github.com/mokinan/app_armor
 issue_tracker: https://github.com/mokinan/app_armor/issues

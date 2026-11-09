@@ -1,3 +1,11 @@
+## 0.1.1
+
+- iOS: the app switcher blur now also works in apps that use UIScene.
+- `LogRedactor`: short key words (`pin`, `otp`, `card`, `cvv`…) only match
+  whole words, so keys like `shipping` or `discard` are no longer masked.
+- Docs: adding `ArmorVault` to an existing app, and tapjacking protection
+  with screen filter apps.
+
 ## 0.1.0
 
 First release.

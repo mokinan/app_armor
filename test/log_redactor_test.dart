@@ -36,4 +36,16 @@ void main() {
     expect(
         redactor.redactText('invoice 1234567890123'), 'invoice 1234567890123');
   });
+
+  test('short words match whole words only', () {
+    expect(redactor.isSensitiveKey('pin'), isTrue);
+    expect(redactor.isSensitiveKey('userPin'), isTrue);
+    expect(redactor.isSensitiveKey('card_number'), isTrue);
+    expect(redactor.isSensitiveKey('OTP'), isTrue);
+    expect(redactor.isSensitiveKey('shipping'), isFalse);
+    expect(redactor.isSensitiveKey('discard'), isFalse);
+    expect(redactor.isSensitiveKey('footprint'), isFalse);
+    expect(redactor.isSensitiveKey('X-Access-Token'), isTrue);
+    expect(redactor.isSensitiveKey('refreshTokenExpiry'), isTrue);
+  });
 }

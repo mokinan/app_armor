@@ -16,7 +16,14 @@ typedef LegacyRemove = FutureOr<void> Function(String key);
 /// - Values never leave the device: they are not in iCloud Keychain or
 ///   backups (`unlocked_this_device` on iOS).
 /// - [clearOnReinstall]: the iOS Keychain survives uninstalling the app;
-///   with this on, a fresh install starts empty.
+///   with this on, a fresh install starts empty. AppArmor can't tell the
+///   first run of a fresh install from the first run of an update that
+///   adds AppArmor, so adding a vault with this on to an app that already
+///   has users clears their stored values once. Turn it off there, or ship
+///   it knowing users sign in again once.
+/// - The default iOS accessibility is `unlocked_this_device`. Values your
+///   app saved earlier with other `IOSOptions` may not be found; pass your
+///   own [storage] with the same options to keep reading them.
 /// - [legacyRead]/[legacyRemove]: values still in plain-text storage are
 ///   moved into the vault the first time they are read, then erased.
 /// - Never throws: a failed read returns null, a failed write is logged.

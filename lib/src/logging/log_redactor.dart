@@ -7,23 +7,25 @@ class LogRedactor {
     this.maskPatterns = true,
   });
 
-  /// Map keys that contain any of these (case-insensitive) are masked.
+  /// Map keys are masked when they contain one of these (case-insensitive).
+  /// Words of 4 letters or fewer must be a whole word of the key, so `pin`
+  /// masks `pin` and `userPin` but not `shipping`.
   static const List<String> defaultSensitiveKeys = [
     'authorization',
     'password',
     'passwd',
     'token',
     'secret',
-    'otp',
-    'pin',
-    'cvv',
-    'cvc',
     'cookie',
     'apikey',
     'api_key',
     'session',
-    'card',
     'iban',
+    'otp',
+    'pin',
+    'cvv',
+    'cvc',
+    'card',
   ];
 
   final List<String> sensitiveKeys;
@@ -39,8 +41,19 @@ class LogRedactor {
   static final RegExp _card = RegExp(r'\b(?:\d[ -]?){12,18}\d\b');
 
   bool isSensitiveKey(Object? key) {
-    final String lower = key.toString().toLowerCase();
-    return sensitiveKeys.any(lower.contains);
+    final String text = key.toString();
+    final String lower = text.toLowerCase();
+    // "accessToken", "access_token", "Access-Token" -> access, token
+    final Set<String> words = text
+        .replaceAllMapped(
+            RegExp(r'([a-z0-9])([A-Z])'), (m) => '${m[1]} ${m[2]}')
+        .toLowerCase()
+        .split(RegExp(r'[^a-z0-9]+'))
+        .toSet();
+    return sensitiveKeys.any((s) {
+      final String word = s.toLowerCase();
+      return word.length <= 4 ? words.contains(word) : lower.contains(word);
+    });
   }
 
   /// A deep copy of [value] with sensitive map entries masked. Strings are

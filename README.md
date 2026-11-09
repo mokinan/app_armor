@@ -249,7 +249,7 @@ ArmorConfig(
 | `hideInAppSwitcher` | `true` | Blur (iOS) / blank card (Android 13+) in the app switcher. |
 | `blockScreenshots` | `false` | Blocks screenshots and recording in the whole app (Android). On iOS it covers the app while recording. |
 | `coverWhileRecording` | `false` | iOS: blur while the screen is recorded, mirrored or cast. |
-| `preventTapjacking` | `true` | Android: ignore taps through other apps' overlays. |
+| `preventTapjacking` | `true` | Android: ignore taps through other apps' overlays. Screen filter apps (blue light, dimmers) are overlays too: their users can't tap while one is on. |
 | `detectScreenshots` | `true` | Report `screenshot` / `screenRecording` through the policy. |
 
 `PrivacyConfig.off` turns all of them off.
@@ -473,6 +473,8 @@ await vault.delete('refresh_token');
 await vault.clear(); // on logout
 ```
 
+> **Adding a vault to an app that already has users?** AppArmor can't tell a fresh install from the first run after an update, so `clearOnReinstall: true` clears stored values once and users sign in again. Use `clearOnReinstall: false` to avoid that. If your app saved Keychain values with other `IOSOptions`, pass your own `storage:` with the same options so they can still be read.
+
 Values are stored with `unlocked_this_device` on iOS: they are never synced to iCloud Keychain or restored on another device. Errors never throw: a failed read returns `null`.
 
 ## Certificate pinning
@@ -631,6 +633,7 @@ It never overwrites values you already set, unless you pass `--force`. Running i
 | Store users see "This copy of the app was modified" | The Google Play signing key is missing from `androidSigningCertHashes`. |
 | Testers on emulators are blocked | `copyWith({ArmorThreat.emulator: ThreatAction.warn})` for non-production builds. |
 | The app closes right after starting | `killOnBypass` closed it because the threat callbacks were hooked. This is expected on attack tools. |
+| Users of screen filter apps can't tap | Set `preventTapjacking: false`. |
 | The blocked screen is in the wrong language | With `AppArmor.run`, call `AppArmor.setLocale(...)`, or use `AppArmor.builder` inside `MaterialApp`. |
 | Build warning about Kotlin Gradle Plugin from `freerasp` | It comes from the freeRASP engine and is harmless for now. |
 
