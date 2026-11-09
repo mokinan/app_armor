@@ -1,0 +1,55 @@
+name: app_armor
+description: >-
+  All-in-one mobile security for Flutter: root/jailbreak, hooking and tamper
+  detection, screen privacy, secure storage, SSL pinning. One call in main().
+version: 0.1.0
+homepage: https://github.com/mokinan/app_armor
+repository: https://github.com/mokinan/app_armor
+issue_tracker: https://github.com/mokinan/app_armor/issues
+topics:
+  - security
+  - rasp
+  - root-detection
+  - ssl-pinning
+  - privacy
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  freerasp: ^8.2.4
+  flutter_secure_storage: ">=10.0.0 <12.0.0"
+  crypto: ^3.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  fake_async: ^1.3.1
+
+screenshots:
+  - description: Checking badge while the security checks run.
+    path: doc/screenshots/checking.png
+  - description: Blocked screen on a rooted device.
+    path: doc/screenshots/blocked_en.png
+  - description: Blocked screen in Arabic.
+    path: doc/screenshots/blocked_ar.png
+  - description: A custom blocked screen made with blockedScreenBuilder.
+    path: doc/screenshots/custom.png
+  - description: Badge after the checks pass.
+    path: doc/screenshots/passed.png
+
+executables:
+  app_armor:
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: io.github.mokinan.app_armor
+        pluginClass: AppArmorPlugin
+      ios:
+        pluginClass: AppArmorPlugin
