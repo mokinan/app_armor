@@ -1,3 +1,22 @@
+## 0.2.0
+
+- `platforms` on `ArmorConfig`, `RaspConfig` and `PrivacyConfig`: run
+  AppArmor, or one part of it, only on Android or only on iOS. All
+  platforms by default, so existing apps are unchanged.
+- Each part can be used on its own: `ArmorRasp` (runtime checks) and
+  `ArmorScreenProtection` (screen privacy), with their own imports
+  `package:app_armor/rasp.dart`, `screen_protection.dart`, `storage.dart`,
+  `network.dart`, `logging.dart`, `session.dart` and `clipboard.dart`.
+  `package:app_armor/app_armor.dart` and `AppArmor.run` still bring
+  everything.
+- `ArmorPlatform.current` tells where the app runs.
+- Remote control: `AppArmor.setEnabled` turns protection on or off while
+  the app runs (e.g. from Firebase Remote Config or Firestore), and
+  `AppArmor.setPolicy` with `ThreatPolicy.fromJson` changes the policy.
+  Threats found while off apply as soon as protection is back on.
+- `ArmorConfig.enabled: false` now means "start off": `setEnabled(true)`
+  can turn it on later.
+
 ## 0.1.1
 
 - iOS: the app switcher blur now also works in apps that use UIScene.

@@ -13,6 +13,10 @@ final vault = ArmorVault();
 void main() => AppArmor.run(
   config: ArmorConfig(
     // Each part can be removed or turned off on its own.
+    // All platforms by default; e.g. {ArmorPlatform.android} for Android only.
+    platforms: ArmorPlatform.all,
+    // Later, from a remote flag: AppArmor.setEnabled(false) / (true), and
+    // AppArmor.setPolicy(ThreatPolicy.fromJson({...})).
     rasp: const RaspConfig(
       androidPackageName: 'io.github.mokinan.app_armor_example',
       // SHA-256 of your upload key AND the Google Play signing key.
@@ -229,9 +233,7 @@ class HomePage extends StatelessWidget {
                   ).showSnackBar(SnackBar(content: Text('Vault read: $token')));
                 }
               },
-              child: Text(
-                tr('Save and read a secret', 'حفظ وقراءة قيمة سرية'),
-              ),
+              child: Text(tr('Save and read a secret', 'حفظ وقراءة قيمة سرية')),
             ),
             const SizedBox(height: 12),
             OutlinedButton(
@@ -250,9 +252,7 @@ class HomePage extends StatelessWidget {
             OutlinedButton(
               onPressed: () =>
                   AppArmor.reportThreat(ArmorThreat.rootOrJailbreak),
-              child: Text(
-                tr('Simulate a blocking threat', 'محاكاة تهديد'),
-              ),
+              child: Text(tr('Simulate a blocking threat', 'محاكاة تهديد')),
             ),
           ],
         ),

@@ -127,6 +127,46 @@ class ThreatPolicy {
   factory ThreatPolicy.monitorOnly() =>
       const ThreatPolicy({}, fallback: ThreatAction.warn);
 
+  /// Reads a policy from remote config or Firestore, so it can change
+  /// without a new release:
+  /// ```json
+  /// {"preset": "strict", "fallback": "warn", "emulator": "warn", "vpn": "ignore"}
+  /// ```
+  /// `preset` is `recommended`, `strict` or `monitorOnly` (else [base],
+  /// [ThreatPolicy.recommended] by default). Other keys are [ArmorThreat]
+  /// names, values are [ThreatAction] names. Unknown keys and values are
+  /// skipped, so older app versions keep working when new threats are added.
+  factory ThreatPolicy.fromJson(Map<String, Object?> json,
+      {ThreatPolicy? base}) {
+    final ThreatPolicy policy = switch (json['preset']) {
+      'recommended' => ThreatPolicy.recommended(),
+      'strict' => ThreatPolicy.strict(),
+      'monitorOnly' => ThreatPolicy.monitorOnly(),
+      _ => base ?? ThreatPolicy.recommended(),
+    };
+    final ThreatAction? fallback = _action(json['fallback']);
+    final Map<ArmorThreat, ThreatAction> overrides = {};
+    for (final ArmorThreat t in ArmorThreat.values) {
+      final ThreatAction? a = _action(json[t.name]);
+      if (a != null) overrides[t] = a;
+    }
+    return policy.copyWith(overrides, fallback: fallback);
+  }
+
+  static ThreatAction? _action(Object? name) {
+    for (final ThreatAction a in ThreatAction.values) {
+      if (a.name == name) return a;
+    }
+    return null;
+  }
+
+  /// The opposite of [ThreatPolicy.fromJson].
+  Map<String, String> toJson() => {
+        'fallback': fallback.name,
+        for (final MapEntry<ArmorThreat, ThreatAction> e in actions.entries)
+          e.key.name: e.value.name,
+      };
+
   ThreatAction actionFor(ArmorThreat threat) => actions[threat] ?? fallback;
 
   /// A copy with [overrides] replacing the actions of those threats.
