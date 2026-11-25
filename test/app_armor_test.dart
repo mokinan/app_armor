@@ -157,4 +157,59 @@ void main() {
     AppArmor.reportThreat(ArmorThreat.tampering);
     expect(AppArmor.status.value.blockedBy, ArmorThreat.tampering);
   });
+
+  group('platforms', () {
+    test('a platform left out runs nothing at all', () async {
+      ArmorPlatform.debugOverride = ArmorPlatform.ios;
+      final engine = FakeEngine();
+      final before = debugPrint;
+      await AppArmor.init(
+          const ArmorConfig(rasp: rasp, platforms: {ArmorPlatform.android}),
+          engine: engine);
+
+      expect(engine.started, isNull);
+      expect(calls, isEmpty);
+      expect(identical(debugPrint, before), isTrue);
+      AppArmor.reportThreat(ArmorThreat.tampering);
+      expect(AppArmor.status.value.isBlocked, isFalse);
+    });
+
+    test('runs on a listed platform', () async {
+      ArmorPlatform.debugOverride = ArmorPlatform.android;
+      final engine = FakeEngine();
+      await AppArmor.init(
+          const ArmorConfig(rasp: rasp, platforms: {ArmorPlatform.android}),
+          engine: engine);
+      expect(engine.started, isNotNull);
+      expect(calls.single.method, 'configure');
+    });
+
+    test('each part can be limited on its own', () async {
+      ArmorPlatform.debugOverride = ArmorPlatform.ios;
+      final engine = FakeEngine();
+      await AppArmor.init(
+          const ArmorConfig(
+            rasp: RaspConfig(
+              androidPackageName: 'com.example.app',
+              androidSigningCertHashes: ['AAAA'],
+              iosBundleIds: ['com.example.app'],
+              iosTeamId: 'ABCDE12345',
+              platforms: {ArmorPlatform.android},
+            ),
+          ),
+          engine: engine);
+      expect(engine.started, isNull, reason: 'RASP is Android only');
+      expect(AppArmor.status.value.phase, ArmorPhase.idle);
+      expect(calls.single.method, 'configure', reason: 'privacy still runs');
+    });
+
+    test('secure screens follow the privacy platforms', () async {
+      ArmorPlatform.debugOverride = ArmorPlatform.ios;
+      await AppArmor.init(const ArmorConfig(
+          privacy: PrivacyConfig(platforms: {ArmorPlatform.android})));
+      await ArmorNative.pushSecureScreen();
+      await ArmorNative.popSecureScreen();
+      expect(calls, isEmpty);
+    });
+  });
 }

@@ -1,11 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'config.dart';
 import 'logging/release_logs.dart';
 import 'privacy/armor_native.dart';
+import 'privacy/armor_screen_protection.dart';
+import 'rasp/armor_rasp.dart';
 import 'rasp/rasp_engine.dart';
 import 'status.dart';
 import 'threats.dart';
@@ -45,11 +46,18 @@ class AppArmor {
   static Timer? _timer;
   static bool _initialized = false;
 
+  /// True after [init] when AppArmor doesn't run on this platform.
+  static bool _off = false;
+
   /// Overrides `kReleaseMode` in tests.
   @visibleForTesting
-  static bool? debugIsRelease;
+  static bool? get debugIsRelease => ArmorPlatform.debugIsRelease;
 
-  static bool get _isRelease => debugIsRelease ?? kReleaseMode;
+  @visibleForTesting
+  static set debugIsRelease(bool? value) =>
+      ArmorPlatform.debugIsRelease = value;
+
+  static bool get _isRelease => ArmorPlatform.isRelease;
 
   static ArmorConfig get config => _config;
 
@@ -60,6 +68,9 @@ class AppArmor {
   /// calls are ignored. Never throws: if a part fails to start, the app
   /// keeps running without it.
   ///
+  /// On a platform missing from [ArmorConfig.platforms] nothing starts,
+  /// `ArmorSecureScreen` does nothing and [reportThreat] is ignored.
+  ///
   /// The runtime checks run in the background; this returns as soon as they
   /// are started.
   static Future<void> init(ArmorConfig config, {RaspEngine? engine}) async {
@@ -67,13 +78,19 @@ class AppArmor {
     _initialized = true;
     _config = config;
 
+    if (!config.runsHere) {
+      _off = true;
+      ArmorNative.privacyPlatforms = const {};
+      return;
+    }
+
     if (config.silenceLogsInRelease && _isRelease) ReleaseLogs.silence();
 
     await _startPrivacy(config.privacy);
 
     final RaspConfig? rasp = config.rasp;
-    if (rasp != null && (_isRelease || rasp.runInDebug) && _raspSupported) {
-      await _startRasp(rasp, engine ?? FreeRaspEngine());
+    if (rasp != null && ArmorRasp.willRun(rasp)) {
+      await _startRasp(rasp, engine);
     }
   }
 
@@ -93,7 +110,7 @@ class AppArmor {
       runApp(ArmorGate(child: root));
     }
 
-    if (config.enabled && config.silenceLogsInRelease && _isRelease) {
+    if (config.runsHere && config.silenceLogsInRelease && _isRelease) {
       return ReleaseLogs.runSilenced(body);
     }
     return body();
@@ -124,47 +141,29 @@ class AppArmor {
     status.value = s.copyWith(warnings: {...s.warnings}..remove(threat));
   }
 
-  static bool get _raspSupported =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
-
   static Future<void> _startPrivacy(PrivacyConfig privacy) async {
-    try {
-      await ArmorNative.applyPrivacy(privacy);
-      if (privacy.detectScreenshots) {
-        _subscriptions
-          ..add(ArmorNative.onScreenshot
-              .listen((_) => _handle(ArmorThreat.screenshot)))
-          ..add(ArmorNative.onScreenCaptureChanged.listen((captured) {
-            if (captured) {
-              _handle(ArmorThreat.screenRecording);
-            } else {
-              clearWarning(ArmorThreat.screenRecording);
-            }
-          }));
-      }
-    } catch (e) {
-      debugPrint('AppArmor: privacy failed to start (${e.runtimeType})');
+    if (!await ArmorScreenProtection.start(privacy)) return;
+    if (privacy.detectScreenshots) {
+      _subscriptions
+        ..add(ArmorScreenProtection.threats.listen(_handle))
+        ..add(ArmorScreenProtection.recordingStopped
+            .listen((_) => clearWarning(ArmorThreat.screenRecording)));
     }
   }
 
-  static Future<void> _startRasp(RaspConfig rasp, RaspEngine engine) async {
+  static Future<void> _startRasp(RaspConfig rasp, RaspEngine? engine) async {
     _onChecksStarted(rasp.checkTimeout);
-    try {
-      _subscriptions
-        ..add(engine.checksFinished.listen((_) => _onChecksFinished()))
-        ..add(engine.threats.listen(_handle));
-      await engine.start(rasp);
-    } catch (e) {
-      // Never stop the app because protection failed to start.
-      debugPrint('AppArmor: runtime protection failed to start '
-          '(${e.runtimeType})');
+    _subscriptions
+      ..add(ArmorRasp.checksFinished.listen((_) => _onChecksFinished()))
+      ..add(ArmorRasp.threats.listen(_handle));
+    // Never stops the app if protection fails to start.
+    if (!await ArmorRasp.start(rasp, engine: engine)) {
       _setIdleIf(ArmorPhase.checking);
     }
   }
 
   static void _handle(ArmorThreat threat) {
+    if (_off) return;
     final ThreatAction action = _config.effectivePolicy.actionFor(threat);
     if (action == ThreatAction.ignore) return;
 
@@ -220,8 +219,12 @@ class AppArmor {
     _timer?.cancel();
     _history.clear();
     _initialized = false;
+    _off = false;
     _config = const ArmorConfig(enabled: false);
     debugIsRelease = null;
+    ArmorPlatform.debugOverride = null;
+    await ArmorRasp.reset();
+    ArmorScreenProtection.reset();
     ReleaseLogs.restore();
     locale.value = null;
     status.value = const ArmorStatus();

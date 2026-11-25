@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:freerasp/freerasp.dart';
 
-import '../config.dart';
+import 'rasp_config.dart';
 import '../threats.dart';
 
 /// The runtime checks behind [RaspConfig]. Replaceable in tests.

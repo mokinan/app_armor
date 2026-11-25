@@ -27,6 +27,8 @@
 - [Quick start](#quick-start)
 - [Getting every configuration value](#getting-every-configuration-value)
 - [Configuration reference](#configuration-reference)
+- [Choosing platforms](#choosing-platforms)
+- [Using one part on its own](#using-one-part-on-its-own)
 - [Threats and policies](#threats-and-policies)
 - [Customizing the blocked screen and the loader](#customizing-the-blocked-screen-and-the-loader)
 - [Screen privacy](#screen-privacy)
@@ -67,7 +69,7 @@
 
 ```yaml
 dependencies:
-  app_armor: ^0.1.0
+  app_armor: ^0.2.0
 ```
 
 | Platform | Minimum |
@@ -219,6 +221,7 @@ See [Certificate pinning](#certificate-pinning) for the `openssl` commands.
 ```dart
 ArmorConfig(
   enabled: true,                    // master switch: false = AppArmor does nothing
+  platforms: ArmorPlatform.all,     // or {ArmorPlatform.android}: nothing runs on iOS
   policy: ThreatPolicy.recommended(),
   rasp: RaspConfig(…),              // null = no runtime checks
   privacy: PrivacyConfig(…),
@@ -241,6 +244,7 @@ ArmorConfig(
 | `killOnBypass` | `true` | Closes the app if an attacker hooks the threat callbacks themselves. |
 | `runInDebug` | `false` | Debug builds skip the checks so `flutter run`, the debugger and emulators keep working. |
 | `checkTimeout` | `20s` | The loader hides if the engine never reports back. |
+| `platforms` | `ArmorPlatform.all` | Where the runtime checks run. See [Choosing platforms](#choosing-platforms). |
 
 ### `PrivacyConfig`
 
@@ -251,6 +255,7 @@ ArmorConfig(
 | `coverWhileRecording` | `false` | iOS: blur while the screen is recorded, mirrored or cast. |
 | `preventTapjacking` | `true` | Android: ignore taps through other apps' overlays. Screen filter apps (blue light, dimmers) are overlays too: their users can't tap while one is on. |
 | `detectScreenshots` | `true` | Report `screenshot` / `screenRecording` through the policy. |
+| `platforms` | `ArmorPlatform.all` | Where screen privacy runs, `ArmorSecureScreen` included. |
 
 `PrivacyConfig.off` turns all of them off.
 
@@ -268,6 +273,81 @@ ArmorConfig(
 | `fontFamily` | app font | Font for both screens. |
 | `blockedScreenBuilder` | | Your own blocked screen. |
 | `statusBadgeBuilder` | | Your own loader. |
+
+## Choosing platforms
+
+Everything runs on Android and iOS by default. Pass `platforms` to run only on some of them; everywhere else, that part simply doesn't start.
+
+```dart
+// All of AppArmor on Android only. On iOS nothing starts: no checks, no
+// screen privacy, no blocked screen, logs untouched.
+ArmorConfig(
+  platforms: {ArmorPlatform.android},
+  rasp: RaspConfig(…),
+)
+
+// Or per part: runtime checks on Android only, screen privacy everywhere.
+ArmorConfig(
+  rasp: RaspConfig(…, platforms: {ArmorPlatform.android}),
+  privacy: const PrivacyConfig(blockScreenshots: true),
+)
+```
+
+| Setting | Limits |
+|---|---|
+| `ArmorConfig.platforms` | All of AppArmor. On other platforms `AppArmor.init` does nothing, `ArmorSecureScreen` does nothing and `AppArmor.reportThreat` is ignored. |
+| `RaspConfig.platforms` | Runtime checks only. |
+| `PrivacyConfig.platforms` | Screen privacy and `ArmorSecureScreen` only. |
+
+A part runs only where both its own `platforms` and `ArmorConfig.platforms` allow it. The tools you call yourself (`ArmorVault`, `ArmorPinning`, `LogRedactor`, `ArmorSessionGuard`, `ArmorClipboard`) work wherever you call them. `ArmorPlatform.current` tells you where the app runs, if you need it in your own code.
+
+## Using one part on its own
+
+`package:app_armor/app_armor.dart` has everything and `AppArmor.run` starts everything, as before. Each part can also be imported and started on its own:
+
+| Import | What you get |
+|---|---|
+| `package:app_armor/app_armor.dart` | Everything. |
+| `package:app_armor/rasp.dart` | `ArmorRasp`, `RaspConfig`: root, jailbreak, hooks, debugger, emulator, tampering… |
+| `package:app_armor/screen_protection.dart` | `ArmorScreenProtection`, `PrivacyConfig`, `ArmorSecureScreen` |
+| `package:app_armor/storage.dart` | `ArmorVault` |
+| `package:app_armor/network.dart` | `ArmorPinning`, `ArmorWebViewPolicy`, `SafeUrls`, `ArmorDevCertificates` |
+| `package:app_armor/logging.dart` | `LogRedactor`, `ReleaseLogs` |
+| `package:app_armor/session.dart` | `ArmorSessionGuard` |
+| `package:app_armor/clipboard.dart` | `ArmorClipboard` |
+
+**Root / jailbreak / hooking checks only.** There is no blocked screen or policy here: you decide what each threat does.
+
+```dart
+import 'package:app_armor/rasp.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  ArmorRasp.threats.listen((threat) {
+    if (threat == ArmorThreat.rootOrJailbreak) showRootedDialog();
+  });
+  await ArmorRasp.start(const RaspConfig(
+    androidPackageName: 'com.company.app',
+    androidSigningCertHashes: ['AB:CD:…:EF'],
+    iosBundleIds: ['com.company.app'],
+    iosTeamId: 'ABCDE12345',
+  ));
+  runApp(const MyApp());
+}
+```
+
+**Screen privacy only:**
+
+```dart
+import 'package:app_armor/screen_protection.dart';
+
+await ArmorScreenProtection.start(const PrivacyConfig(blockScreenshots: true));
+ArmorScreenProtection.threats.listen((t) => analytics.log(t.name));
+```
+
+`start` returns `false` when the part doesn't run here (another platform, or a debug build for `ArmorRasp` without `runInDebug`). Use either `AppArmor` or the parts on their own for the same feature, not both.
+
+> Importing one part keeps your Dart code small, but the native libraries of every part (freeRASP, flutter_secure_storage) are still built into the app, because they are dependencies of the package.
 
 ## Threats and policies
 
@@ -666,6 +746,9 @@ Runtime protection is powered by [freeRASP](https://pub.dev/packages/freerasp) b
 - **إنهاء الجلسة** بعد عدم النشاط أو البقاء في الخلفية.
 - **أمر إعداد** يمنع النسخ الاحتياطي ويفرض HTTPS ويرفض شهادات المستخدم.
 
+- **اختيار المنصة**: الحماية تعمل على أندرويد و iOS افتراضيًا، ويمكن قصرها على منصة واحدة.
+- **كل جزء منفصل**: يمكن استيراد وتشغيل أي جزء وحده (فحوصات الروت، خصوصية الشاشة، التخزين…)، أو كل شيء معًا كما هو.
+
 ### الاستخدام
 
 </div>
@@ -697,6 +780,54 @@ void main() => AppArmor.run(
 
 ```sh
 dart run app_armor
+```
+
+<div dir="rtl">
+
+### تشغيل الحماية على منصة معينة
+
+كل الحمايات تعمل على أندرويد و iOS افتراضيًا. حدد `platforms` لتشغيلها على منصة معينة فقط، وعلى باقي المنصات لن تبدأ.
+
+</div>
+
+```dart
+// AppArmor كله على أندرويد فقط، وعلى iOS لا يعمل أي شيء
+ArmorConfig(platforms: {ArmorPlatform.android}, rasp: RaspConfig(…))
+
+// أو لكل جزء: فحوصات الروت على أندرويد فقط، وخصوصية الشاشة على الكل
+ArmorConfig(
+  rasp: RaspConfig(…, platforms: {ArmorPlatform.android}),
+  privacy: const PrivacyConfig(blockScreenshots: true),
+)
+```
+
+<div dir="rtl">
+
+### استخدام كل جزء وحده
+
+`package:app_armor/app_armor.dart` فيه كل شيء و `AppArmor.run` يشغّل كل شيء كما هو. ويمكن استيراد أي جزء وحده:
+
+| الاستيراد | المحتوى |
+|---|---|
+| `package:app_armor/rasp.dart` | فحوصات الروت والجيلبريك والـ hooking والمحاكي والتعديل: `ArmorRasp` |
+| `package:app_armor/screen_protection.dart` | خصوصية الشاشة: `ArmorScreenProtection` و `ArmorSecureScreen` |
+| `package:app_armor/storage.dart` | التخزين الآمن: `ArmorVault` |
+| `package:app_armor/network.dart` | الـ Pinning والروابط الآمنة |
+| `package:app_armor/logging.dart` | السجلات |
+| `package:app_armor/session.dart` | إنهاء الجلسة |
+| `package:app_armor/clipboard.dart` | الحافظة |
+
+</div>
+
+```dart
+import 'package:app_armor/rasp.dart';
+
+ArmorRasp.threats.listen((threat) { /* أنت تقرر ماذا تفعل */ });
+await ArmorRasp.start(const RaspConfig(…));
+
+import 'package:app_armor/screen_protection.dart';
+
+await ArmorScreenProtection.start(const PrivacyConfig(blockScreenshots: true));
 ```
 
 <div dir="rtl">

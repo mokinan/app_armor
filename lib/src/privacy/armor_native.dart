@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../config.dart';
+import '../platforms.dart';
+import 'privacy_config.dart';
 
 /// Talks to AppArmor's Android and iOS code.
 class ArmorNative {
@@ -19,6 +20,12 @@ class ArmorNative {
   static bool _listening = false;
   static int _secureScreens = 0;
 
+  /// Where screen privacy may run, from [PrivacyConfig.platforms]. Elsewhere
+  /// [applyPrivacy] and secure screens do nothing.
+  static Set<ArmorPlatform> privacyPlatforms = ArmorPlatform.all;
+
+  static bool get _privacyHere => ArmorPlatform.isCurrentIn(privacyPlatforms);
+
   /// Fires when the user takes a screenshot (iOS, Android 14+).
   static Stream<void> get onScreenshot {
     _listen();
@@ -32,10 +39,7 @@ class ArmorNative {
     return _capture.stream;
   }
 
-  static bool get _supported =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+  static bool get _supported => ArmorPlatform.current != null;
 
   static void _listen() {
     if (_listening) return;
@@ -51,6 +55,8 @@ class ArmorNative {
   }
 
   static Future<void> applyPrivacy(PrivacyConfig config) async {
+    privacyPlatforms = config.platforms;
+    if (!_privacyHere) return;
     _listen();
     await _invoke('configure', {
       'hideInAppSwitcher': config.hideInAppSwitcher,
@@ -64,13 +70,23 @@ class ArmorNative {
   /// Turns screenshot blocking on while at least one secure screen is shown.
   static Future<void> pushSecureScreen() async {
     _secureScreens++;
-    if (_secureScreens == 1) await _invoke('setSecureScreen', true);
+    if (_secureScreens == 1 && _privacyHere) {
+      await _invoke('setSecureScreen', true);
+    }
   }
 
   static Future<void> popSecureScreen() async {
     if (_secureScreens == 0) return;
     _secureScreens--;
-    if (_secureScreens == 0) await _invoke('setSecureScreen', false);
+    if (_secureScreens == 0 && _privacyHere) {
+      await _invoke('setSecureScreen', false);
+    }
+  }
+
+  /// For tests.
+  static void reset() {
+    privacyPlatforms = ArmorPlatform.all;
+    _secureScreens = 0;
   }
 
   /// Whether the screen is being recorded or mirrored right now (iOS).

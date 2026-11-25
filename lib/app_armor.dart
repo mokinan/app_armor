@@ -13,6 +13,10 @@
 ///       app: () => const MyApp(),
 ///     );
 /// ```
+///
+/// This library has everything. Each part can also be imported on its own:
+/// `rasp.dart`, `screen_protection.dart`, `storage.dart`, `network.dart`,
+/// `logging.dart`, `session.dart` and `clipboard.dart`.
 library;
 
 export 'src/app_armor.dart' show AppArmor;
@@ -23,6 +27,8 @@ export 'src/logging/release_logs.dart';
 export 'src/network/certificate_pinning.dart';
 export 'src/network/safe_urls.dart';
 export 'src/privacy/armor_native.dart';
+export 'src/privacy/armor_screen_protection.dart';
+export 'src/rasp/armor_rasp.dart';
 export 'src/rasp/rasp_engine.dart' show RaspEngine;
 export 'src/session/armor_session_guard.dart';
 export 'src/status.dart';

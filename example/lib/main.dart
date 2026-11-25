@@ -13,6 +13,8 @@ final vault = ArmorVault();
 void main() => AppArmor.run(
   config: ArmorConfig(
     // Each part can be removed or turned off on its own.
+    // All platforms by default; e.g. {ArmorPlatform.android} for Android only.
+    platforms: ArmorPlatform.all,
     rasp: const RaspConfig(
       androidPackageName: 'io.github.mokinan.app_armor_example',
       // SHA-256 of your upload key AND the Google Play signing key.
