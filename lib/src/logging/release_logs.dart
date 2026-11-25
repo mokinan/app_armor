@@ -15,6 +15,9 @@ class ReleaseLogs {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
 
+  /// Whether [silence] is in effect.
+  static bool get isSilenced => _original != null;
+
   /// Undoes [silence].
   static void restore() {
     if (_original == null) return;

@@ -22,7 +22,9 @@ class ArmorConfig {
     this.onThreat,
   });
 
-  /// Master switch. When false, [AppArmor.init] does nothing at all.
+  /// Whether protection starts on. When false, [AppArmor.init] starts
+  /// nothing until `AppArmor.setEnabled(true)`, e.g. after reading a remote
+  /// flag.
   final bool enabled;
 
   /// The platforms AppArmor runs on; all of them by default. With

@@ -10,6 +10,12 @@
   `package:app_armor/app_armor.dart` and `AppArmor.run` still bring
   everything.
 - `ArmorPlatform.current` tells where the app runs.
+- Remote control: `AppArmor.setEnabled` turns protection on or off while
+  the app runs (e.g. from Firebase Remote Config or Firestore), and
+  `AppArmor.setPolicy` with `ThreatPolicy.fromJson` changes the policy.
+  Threats found while off apply as soon as protection is back on.
+- `ArmorConfig.enabled: false` now means "start off": `setEnabled(true)`
+  can turn it on later.
 
 ## 0.1.1
 

@@ -29,6 +29,7 @@
 - [Configuration reference](#configuration-reference)
 - [Choosing platforms](#choosing-platforms)
 - [Using one part on its own](#using-one-part-on-its-own)
+- [Remote control](#remote-control)
 - [Threats and policies](#threats-and-policies)
 - [Customizing the blocked screen and the loader](#customizing-the-blocked-screen-and-the-loader)
 - [Screen privacy](#screen-privacy)
@@ -220,7 +221,7 @@ See [Certificate pinning](#certificate-pinning) for the `openssl` commands.
 
 ```dart
 ArmorConfig(
-  enabled: true,                    // master switch: false = AppArmor does nothing
+  enabled: true,                    // false = start off; AppArmor.setEnabled(true) turns it on
   platforms: ArmorPlatform.all,     // or {ArmorPlatform.android}: nothing runs on iOS
   policy: ThreatPolicy.recommended(),
   rasp: RaspConfig(…),              // null = no runtime checks
@@ -348,6 +349,51 @@ ArmorScreenProtection.threats.listen((t) => analytics.log(t.name));
 `start` returns `false` when the part doesn't run here (another platform, or a debug build for `ArmorRasp` without `runInDebug`). Use either `AppArmor` or the parts on their own for the same feature, not both.
 
 > Importing one part keeps your Dart code small, but the native libraries of every part (freeRASP, flutter_secure_storage) are still built into the app, because they are dependencies of the package.
+
+## Remote control
+
+Turn protection on or off, or change the policy, while the app runs, so a released version can be controlled from Firebase Remote Config, Firestore or your own API.
+
+```dart
+void main() => AppArmor.run(
+      config: ArmorConfig(rasp: RaspConfig(…)),
+      app: () async {
+        await Firebase.initializeApp();
+        final rc = FirebaseRemoteConfig.instance;
+        await rc.fetchAndActivate();
+
+        await AppArmor.setEnabled(rc.getBool('armor_enabled'));
+        AppArmor.setPolicy(
+            ThreatPolicy.fromJson(jsonDecode(rc.getString('armor_policy'))));
+
+        // Later changes, without restarting the app:
+        rc.onConfigUpdated.listen((_) async {
+          await rc.activate();
+          await AppArmor.setEnabled(rc.getBool('armor_enabled'));
+        });
+        return const MyApp();
+      },
+    );
+```
+
+With Firestore, call the same methods from a `snapshots()` listener.
+
+| Call | Effect |
+|---|---|
+| `AppArmor.setEnabled(false)` | Removes the blocked screen and the badge, clears warnings, stops screen privacy and `ArmorSecureScreen`, writes logs again. Threats found meanwhile are kept, not acted on. |
+| `AppArmor.setEnabled(true)` | Starts everything in the config (the runtime checks too, if they haven't started), and applies threats already found right away. |
+| `AppArmor.setPolicy(policy)` | Judges every threat found again with the new policy. A threat that is no longer `block` unblocks the app. `null` goes back to `ArmorConfig.policy`. |
+| `AppArmor.isEnabled` | Whether protection is running now. |
+
+`ThreatPolicy.fromJson` reads a policy like this one. Unknown threat or action names are skipped, so older app versions keep working when you add new ones:
+
+```json
+{"preset": "strict", "fallback": "warn", "emulator": "warn", "vpn": "ignore"}
+```
+
+**Off until the flag arrives.** Protection starts on by default and the flag can turn it off. To keep it off until the flag says otherwise, start with `enabled: false`. Remote Config's `getBool` returns the last value it fetched even before a new fetch, so you can also pass it straight to `ArmorConfig(enabled: …)` at start-up.
+
+> Once freeRASP's checks have started they can't be stopped. While protection is off, AppArmor only ignores what they find. Anyone who can change your remote flag can turn protection off, so protect who can write it.
 
 ## Threats and policies
 
@@ -747,6 +793,7 @@ Runtime protection is powered by [freeRASP](https://pub.dev/packages/freerasp) b
 - **أمر إعداد** يمنع النسخ الاحتياطي ويفرض HTTPS ويرفض شهادات المستخدم.
 
 - **اختيار المنصة**: الحماية تعمل على أندرويد و iOS افتراضيًا، ويمكن قصرها على منصة واحدة.
+- **تحكم عن بُعد**: تشغيل وإيقاف الحماية أو تغيير السياسة من Remote Config أو Firestore بدون تحديث.
 - **كل جزء منفصل**: يمكن استيراد وتشغيل أي جزء وحده (فحوصات الروت، خصوصية الشاشة، التخزين…)، أو كل شيء معًا كما هو.
 
 ### الاستخدام
@@ -831,6 +878,26 @@ await ArmorScreenProtection.start(const PrivacyConfig(blockScreenshots: true));
 ```
 
 <div dir="rtl">
+
+### التحكم في الحماية عن بُعد
+
+يمكنك تشغيل الحماية أو إيقافها أو تغيير السياسة أثناء عمل التطبيق، بناءً على قيمة من Firebase Remote Config أو Firestore، فتتحكم في النسخة المنشورة بدون تحديث.
+
+</div>
+
+```dart
+await AppArmor.setEnabled(remoteConfig.getBool('armor_enabled'));
+AppArmor.setPolicy(ThreatPolicy.fromJson(
+    jsonDecode(remoteConfig.getString('armor_policy'))));
+// {"preset": "strict", "emulator": "warn"}
+```
+
+<div dir="rtl">
+
+- عند الإيقاف: تختفي شاشة الحظر والمؤشر، وتتوقف خصوصية الشاشة، وترجع السجلات. التهديدات التي تُكتشف أثناء الإيقاف تُحفظ ولا يُتخذ فيها إجراء.
+- عند التشغيل: يبدأ كل شيء في الإعدادات، وتُطبَّق التهديدات المكتشفة سابقًا فورًا.
+- لتبدأ الحماية متوقفة حتى تصل القيمة: `ArmorConfig(enabled: false)`.
+- بعد بدء فحوصات freeRASP لا يمكن إيقافها، لكن AppArmor يتجاهل نتائجها أثناء الإيقاف. واحمِ صلاحية تعديل هذه القيمة، لأن من يغيّرها يستطيع إيقاف الحماية.
 
 ### من أين تحصل على كل قيمة
 

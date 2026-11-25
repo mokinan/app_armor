@@ -24,7 +24,21 @@ class ArmorNative {
   /// [applyPrivacy] and secure screens do nothing.
   static Set<ArmorPlatform> privacyPlatforms = ArmorPlatform.all;
 
-  static bool get _privacyHere => ArmorPlatform.isCurrentIn(privacyPlatforms);
+  static bool _privacyAllowed = true;
+
+  static bool get _privacyHere =>
+      _privacyAllowed && ArmorPlatform.isCurrentIn(privacyPlatforms);
+
+  /// Pauses (false) or resumes (true) secure screens, e.g. when protection
+  /// is turned off remotely while one is shown.
+  static Future<void> setPrivacyAllowed(bool allowed) async {
+    final bool before = _privacyHere;
+    _privacyAllowed = allowed;
+    final bool after = _privacyHere;
+    if (_secureScreens > 0 && before != after) {
+      await _invoke('setSecureScreen', after);
+    }
+  }
 
   /// Fires when the user takes a screenshot (iOS, Android 14+).
   static Stream<void> get onScreenshot {
@@ -56,7 +70,7 @@ class ArmorNative {
 
   static Future<void> applyPrivacy(PrivacyConfig config) async {
     privacyPlatforms = config.platforms;
-    if (!_privacyHere) return;
+    if (!ArmorPlatform.isCurrentIn(privacyPlatforms)) return;
     _listen();
     await _invoke('configure', {
       'hideInAppSwitcher': config.hideInAppSwitcher,
@@ -86,6 +100,7 @@ class ArmorNative {
   /// For tests.
   static void reset() {
     privacyPlatforms = ArmorPlatform.all;
+    _privacyAllowed = true;
     _secureScreens = 0;
   }
 

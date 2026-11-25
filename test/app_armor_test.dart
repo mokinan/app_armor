@@ -212,4 +212,98 @@ void main() {
       expect(calls, isEmpty);
     });
   });
+
+  group('remote switch', () {
+    test('starting off, turning on later starts everything', () async {
+      final engine = FakeEngine();
+      await AppArmor.init(const ArmorConfig(enabled: false, rasp: rasp),
+          engine: engine);
+      expect(AppArmor.isEnabled, isFalse);
+      expect(engine.started, isNull);
+      expect(calls.where((c) => c.method == 'configure'), isEmpty);
+
+      await AppArmor.setEnabled(true);
+      expect(AppArmor.isEnabled, isTrue);
+      expect(engine.started, isNotNull);
+      expect(calls.last.method, 'configure');
+      expect(calls.last.arguments['hideInAppSwitcher'], isTrue);
+    });
+
+    test('turning off unblocks, turning on blocks again', () async {
+      final events = <ThreatEvent>[];
+      final engine = FakeEngine();
+      final before = debugPrint;
+      await AppArmor.init(ArmorConfig(rasp: rasp, onThreat: events.add),
+          engine: engine);
+      engine.threatsController.add(ArmorThreat.rootOrJailbreak);
+      await pumpEventQueue();
+      expect(AppArmor.status.value.isBlocked, isTrue);
+
+      await AppArmor.setEnabled(false);
+      expect(AppArmor.status.value.isBlocked, isFalse);
+      expect(AppArmor.status.value.phase, ArmorPhase.idle);
+      expect(identical(debugPrint, before), isTrue, reason: 'logs are back');
+      expect(calls.last.arguments['hideInAppSwitcher'], isFalse);
+
+      // Found while off: kept, not acted on.
+      engine.threatsController.add(ArmorThreat.hooks);
+      await pumpEventQueue();
+      expect(AppArmor.status.value.isBlocked, isFalse);
+      expect(events, hasLength(1));
+
+      await AppArmor.setEnabled(true);
+      expect(AppArmor.status.value.blockedBy, ArmorThreat.rootOrJailbreak);
+      expect(events.map((e) => e.threat), [
+        ArmorThreat.rootOrJailbreak,
+        ArmorThreat.rootOrJailbreak,
+        ArmorThreat.hooks
+      ]);
+    });
+
+    test('secure screens pause while off', () async {
+      await AppArmor.init(const ArmorConfig());
+      await ArmorNative.pushSecureScreen();
+      calls.clear();
+
+      await AppArmor.setEnabled(false);
+      expect(calls.first.method, 'setSecureScreen');
+      expect(calls.first.arguments, isFalse);
+
+      calls.clear();
+      await AppArmor.setEnabled(true);
+      expect(calls.first.method, 'setSecureScreen');
+      expect(calls.first.arguments, isTrue);
+      await ArmorNative.popSecureScreen();
+    });
+
+    test('a new policy judges found threats again', () async {
+      final events = <ThreatEvent>[];
+      final engine = FakeEngine();
+      await AppArmor.init(ArmorConfig(rasp: rasp, onThreat: events.add),
+          engine: engine);
+      engine.threatsController.add(ArmorThreat.emulator);
+      await pumpEventQueue();
+      expect(AppArmor.status.value.blockedBy, ArmorThreat.emulator);
+
+      AppArmor.setPolicy(ThreatPolicy.fromJson({'emulator': 'warn'}));
+      expect(AppArmor.status.value.isBlocked, isFalse);
+      expect(AppArmor.status.value.warnings, {ArmorThreat.emulator});
+      expect(events.last.action, ThreatAction.warn);
+
+      AppArmor.setPolicy(null);
+      expect(AppArmor.status.value.blockedBy, ArmorThreat.emulator);
+    });
+
+    test('does nothing on a platform left out', () async {
+      ArmorPlatform.debugOverride = ArmorPlatform.ios;
+      final engine = FakeEngine();
+      await AppArmor.init(
+          const ArmorConfig(
+              enabled: false, rasp: rasp, platforms: {ArmorPlatform.android}),
+          engine: engine);
+      await AppArmor.setEnabled(true);
+      expect(AppArmor.isEnabled, isFalse);
+      expect(engine.started, isNull);
+    });
+  });
 }

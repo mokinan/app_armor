@@ -35,4 +35,29 @@ void main() {
     expect(p.actionFor(ArmorThreat.vpn), ThreatAction.ignore);
     expect(p.actionFor(ArmorThreat.hooks), ThreatAction.block);
   });
+
+  test('fromJson reads presets and overrides, skips unknown names', () {
+    final p = ThreatPolicy.fromJson({
+      'preset': 'strict',
+      'emulator': 'warn',
+      'vpn': 'ignore',
+      'someFutureThreat': 'block',
+      'hooks': 'explode',
+      'fallback': 'ignore',
+    });
+    expect(p.actionFor(ArmorThreat.emulator), ThreatAction.warn);
+    expect(p.actionFor(ArmorThreat.vpn), ThreatAction.ignore);
+    expect(p.actionFor(ArmorThreat.hooks), ThreatAction.block);
+    expect(p.actionFor(ArmorThreat.multiInstance), ThreatAction.block);
+    expect(p.fallback, ThreatAction.ignore);
+  });
+
+  test('toJson round-trips', () {
+    final p = ThreatPolicy.strict().ignoring([ArmorThreat.vpn]);
+    final back =
+        ThreatPolicy.fromJson(p.toJson(), base: ThreatPolicy.monitorOnly());
+    for (final t in ArmorThreat.values) {
+      expect(back.actionFor(t), p.actionFor(t), reason: t.name);
+    }
+  });
 }
