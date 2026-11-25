@@ -317,34 +317,147 @@ A part runs only where both its own `platforms` and `ArmorConfig.platforms` allo
 | `package:app_armor/session.dart` | `ArmorSessionGuard` |
 | `package:app_armor/clipboard.dart` | `ArmorClipboard` |
 
-**Root / jailbreak / hooking checks only.** There is no blocked screen or policy here: you decide what each threat does.
+The parts on their own don't show a blocked screen and don't use a policy: you decide what each threat does. The examples below use one part each.
+
+### Runtime checks only (root, jailbreak, hooks…)
 
 ```dart
 import 'package:app_armor/rasp.dart';
+import 'package:flutter/material.dart';
+
+final unsafeDevice = ValueNotifier(false);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Listen before start() so no threat is missed.
   ArmorRasp.threats.listen((threat) {
-    if (threat == ArmorThreat.rootOrJailbreak) showRootedDialog();
+    switch (threat) {
+      case ArmorThreat.rootOrJailbreak:
+      case ArmorThreat.hooks:
+        unsafeDevice.value = true; // e.g. hide payments
+      default:
+        debugPrint('threat: ${threat.name}');
+    }
   });
+
   await ArmorRasp.start(const RaspConfig(
     androidPackageName: 'com.company.app',
     androidSigningCertHashes: ['AB:CD:…:EF'],
     iosBundleIds: ['com.company.app'],
     iosTeamId: 'ABCDE12345',
+    platforms: {ArmorPlatform.android}, // optional: Android only
   ));
+
   runApp(const MyApp());
 }
 ```
 
-**Screen privacy only:**
+### Screen privacy only
 
 ```dart
 import 'package:app_armor/screen_protection.dart';
 
-await ArmorScreenProtection.start(const PrivacyConfig(blockScreenshots: true));
-ArmorScreenProtection.threats.listen((t) => analytics.log(t.name));
+await ArmorScreenProtection.start(const PrivacyConfig(
+  hideInAppSwitcher: true,   // blur / blank card in the app switcher
+  blockScreenshots: false,   // true = the whole app
+  coverWhileRecording: true, // iOS: blur while the screen is recorded
+));
+
+ArmorScreenProtection.threats.listen((t) {
+  if (t == ArmorThreat.screenshot) showToast('Screenshots may expose your data');
+});
+
+// Or protect a single screen:
+ArmorSecureScreen(child: CardDetailsPage())
 ```
+
+### Secure storage only
+
+```dart
+import 'package:app_armor/storage.dart';
+
+final vault = ArmorVault(clearOnReinstall: true);
+
+await vault.write('refresh_token', token);
+final saved = await vault.read('refresh_token');
+await vault.clear(); // on logout
+```
+
+### Network only (pinning and safe links)
+
+```dart
+import 'package:app_armor/network.dart';
+
+final pinning = ArmorPinning(pins: {
+  'api.company.com': ['sha256/AAAA…=', 'sha256/BBBB…='], // always two pins
+});
+dio.httpClientAdapter =
+    IOHttpClientAdapter(validateCertificate: pinning.validateCertificate);
+
+SafeUrls.https('company.com/offers');  // https://company.com/offers
+SafeUrls.https('javascript:alert(1)'); // null
+```
+
+### Logs only
+
+```dart
+import 'package:app_armor/logging.dart';
+import 'package:flutter/foundation.dart';
+
+void main() {
+  if (kReleaseMode) ReleaseLogs.silence(); // debugPrint writes nothing in release
+  runApp(const MyApp());
+}
+
+const redactor = LogRedactor();
+redactor.redact({'password': 'x', 'token': 'y'}); // {password: ***, token: ***}
+```
+
+### Session timeout only
+
+```dart
+import 'package:app_armor/session.dart';
+
+MaterialApp(
+  builder: (context, child) => ArmorSessionGuard(
+    enabled: auth.isLoggedIn,
+    inactivityTimeout: const Duration(minutes: 15),
+    backgroundTimeout: const Duration(minutes: 5),
+    onTimeout: (reason) => auth.logout(),
+    child: child!,
+  ),
+);
+```
+
+### Clipboard only
+
+```dart
+import 'package:app_armor/clipboard.dart';
+
+await ArmorClipboard.copySensitive(otp); // cleared after 60 seconds
+```
+
+### A few parts together
+
+```dart
+import 'package:app_armor/rasp.dart';
+import 'package:app_armor/screen_protection.dart';
+import 'package:app_armor/storage.dart';
+```
+
+### Everything, as before
+
+```dart
+import 'package:app_armor/app_armor.dart';
+
+void main() => AppArmor.run(
+      config: ArmorConfig(rasp: RaspConfig(…)),
+      app: () => const MyApp(),
+    );
+```
+
+`AppArmor.run` adds the blocked screen, the checking badge, the threat policy and [remote control](#remote-control). The parts on their own give you the protection only.
 
 `start` returns `false` when the part doesn't run here (another platform, or a debug build for `ArmorRasp` without `runInDebug`). Use either `AppArmor` or the parts on their own for the same feature, not both.
 
@@ -866,16 +979,82 @@ ArmorConfig(
 
 </div>
 
+<div dir="rtl">
+
+الأجزاء المنفصلة لا تعرض شاشة حظر ولا تستخدم سياسة، وأنت من يقرر ماذا يفعل مع كل تهديد. كل مثال من الأمثلة التالية يستخدم جزءًا واحدًا فقط.
+
+**فحص الروت والجيلبريك والـ hooking فقط:**
+
+</div>
+
 ```dart
 import 'package:app_armor/rasp.dart';
 
-ArmorRasp.threats.listen((threat) { /* أنت تقرر ماذا تفعل */ });
-await ArmorRasp.start(const RaspConfig(…));
+ArmorRasp.threats.listen((threat) {
+  if (threat == ArmorThreat.rootOrJailbreak) unsafeDevice.value = true;
+});
+await ArmorRasp.start(const RaspConfig(
+  androidPackageName: 'com.company.app',
+  androidSigningCertHashes: ['AB:CD:…:EF'],
+  iosBundleIds: ['com.company.app'],
+  iosTeamId: 'ABCDE12345',
+  platforms: {ArmorPlatform.android}, // اختياري: أندرويد فقط
+));
+```
 
+<div dir="rtl">
+
+**حماية الشاشة فقط:**
+
+</div>
+
+```dart
 import 'package:app_armor/screen_protection.dart';
 
-await ArmorScreenProtection.start(const PrivacyConfig(blockScreenshots: true));
+await ArmorScreenProtection.start(const PrivacyConfig(
+  hideInAppSwitcher: true,
+  coverWhileRecording: true,
+));
+ArmorSecureScreen(child: CardDetailsPage()); // أو شاشة واحدة فقط
 ```
+
+<div dir="rtl">
+
+**التخزين الآمن، الشبكة، السجلات، الجلسة، الحافظة:**
+
+</div>
+
+```dart
+import 'package:app_armor/storage.dart';
+final vault = ArmorVault(clearOnReinstall: true);
+await vault.write('refresh_token', token);
+
+import 'package:app_armor/network.dart';
+final pinning = ArmorPinning(pins: {'api.company.com': ['sha256/AAAA…=', 'sha256/BBBB…=']});
+SafeUrls.https('company.com/offers'); // https://company.com/offers
+
+import 'package:app_armor/logging.dart';
+if (kReleaseMode) ReleaseLogs.silence();
+const LogRedactor().redact({'password': 'x'}); // {password: ***}
+
+import 'package:app_armor/session.dart';
+ArmorSessionGuard(
+  inactivityTimeout: const Duration(minutes: 15),
+  onTimeout: (reason) => auth.logout(),
+  child: child!,
+);
+
+import 'package:app_armor/clipboard.dart';
+await ArmorClipboard.copySensitive(otp); // يُمسح بعد 60 ثانية
+```
+
+<div dir="rtl">
+
+**أو كل شيء معًا كما كان:** `import 'package:app_armor/app_armor.dart'` ثم `AppArmor.run(...)`، وهذا يضيف شاشة الحظر ومؤشر الفحص والسياسة والتحكم عن بُعد.
+
+> لا تشغّل نفس الجزء بالطريقتين معًا، مثلًا `ArmorRasp.start` مع `rasp` داخل `ArmorConfig`.
+
+</div>
 
 <div dir="rtl">
 

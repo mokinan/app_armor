@@ -1,3 +1,9 @@
+## 0.2.1
+
+- Docs: an example for each part used on its own (runtime checks, screen
+  privacy, storage, network, logs, session timeout, clipboard), in English
+  and Arabic.
+
 ## 0.2.0
 
 - `platforms` on `ArmorConfig`, `RaspConfig` and `PrivacyConfig`: run
